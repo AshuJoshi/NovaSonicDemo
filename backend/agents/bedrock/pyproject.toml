@@ -1,0 +1,18 @@
+[project]
+name = "a2a-samples-bedrock-inline"
+version = "0.1.0"
+description = "Perform web or wiki search using A2A and Bedrock Inline Agents"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "backend",
+    "boto3",
+    "langchain-community",
+    "termcolor",
+    "wikipedia",
+    "rich",
+    "jwcrypto>=1.5.6",
+]
+
+[tool.uv.sources]
+backend = { workspace = true }

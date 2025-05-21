@@ -1,0 +1,24 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aws-sdk-bedrock-runtime>=0.0.2",
+    "numpy>=2.2.5",
+    "strands-agents>=0.1.2",
+    "strands-agents-builder>=0.1.1",
+    "strands-agents-tools>=0.1.1",
+    "websockets>=15.0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["common"]
+
+[tool.uv.workspace]
+members = ["agents/bedrock"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
