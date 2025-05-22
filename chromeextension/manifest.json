@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Nova Sonic S2S Contextual Helper",
+  "version": "0.2.0",
+  "description": "Interact with Nova Sonic using content from your current page.",
+  "permissions": [
+    "audioCapture",
+    "sidePanel", 
+    "activeTab", 
+    "scripting"  
+  ],
+  "host_permissions": [
+    "ws://localhost:8081/*"
+
+  ],
+  "action": {
+    "default_title": "Open Nova Sonic Helper",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": { 
+    "default_path": "index.html" 
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://localhost:8081;"
+  }
+}

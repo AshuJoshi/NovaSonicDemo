@@ -2,12 +2,6 @@
 
 This project demonstrates an advanced implementation of a Speech-to-Speech (S2S) application using the [Amazon Nova Sonic](https://aws.amazon.com/ai/generative-ai/nova/speech/) model on Amazon Bedrock. It has evolved from a simple S2S demo to showcase a modular architecture with support for both synchronous and asynchronous tool use, real-time bidirectional streaming, and an interactive chat interface built with vanilla JavaScript and Vite (frontend) and a Python backend. This project can serve as a starting point for complex conversational AI projects.
 
-**Notes:**
-
-May 2025
-
-This code has been tested with the `amazon.nova-sonic-v1:0` version of the Amazon Nova Sonic model (the primary version available during testing). For the best experience, try with a wired headset and microphone combo.
-
 ## Key Features
 
   * **Real-time Speech-to-Speech:** Leverages Amazon Nova Sonic for low-latency voice conversations.
@@ -33,17 +27,22 @@ This code has been tested with the `amazon.nova-sonic-v1:0` version of the Amazo
       * Voice selection for Nova Sonic's output.
   * **[Agent2Agent](https://github.com/google/A2A) A2A Protocol Integration:**
       * The `agentSearch` tool demonstrates integration with an external agent using an A2A protocol via a Python client. The necessary client-side `common` A2A libraries are included in the project.
+  * **Chrome Extension Capabilities:**
+    * Side panel UI for interacting with Nova Sonic alongside web Browse.
+    * `imageAnalyzer` tool captures screenshots of the active tab for analysis.
 
 ## Architecture
 
-The application consists of a frontend UI that captures user speech and plays back Nova Sonic's responses, and a Python backend that manages the WebSocket connection with the frontend and the bidirectional stream with Amazon Nova Sonic on Bedrock. The backend also orchestrates tool usage.
+The application consists of:
+1.  A **Frontend User Interface**, which can be run as a standalone web application (developed with Vite) or as a Chrome Extension (side panel). It handles user interaction, audio capture/playback, and WebSocket communication.
+2.  A **Python Backend Server**, which manages WebSocket connections from the frontend, maintains the bidirectional stream with Amazon Nova Sonic on Bedrock, and orchestrates tool execution (both synchronous and asynchronous).
+3.  An **A2A Server** for the `agentSearch` tool, runnable from `backend/agents/bedrock/`. Needs to be used when trying `agentSearch`
 
 ![Architecture](arch.png)
 
 ## Project Structure
 
 ```bash
-.
 ├── arch.jpg
 ├── arch.png
 ├── backend
@@ -77,12 +76,35 @@ The application consists of a frontend UI that captures user speech and plays ba
 │   │   │   ├── __init__.py
 │   │   │   ├── agent_search_tool.py
 │   │   │   └── agentclient.py
+│   │   ├── image_analyzer
+│   │   │   ├── __init__.py
+│   │   │   ├── image_analyzer_llm_client.py
+│   │   │   └── image_analyzer_tool.py
 │   │   ├── number_race_tool.py
 │   │   └── weather_tool.py
 │   ├── nova_s2s_backend.py
 │   ├── pyproject.toml
 │   ├── README.md
 │   └── uv.lock
+├── chromeextension
+│   ├── background.js
+│   ├── icons
+│   │   ├── icon128.png
+│   │   ├── icon16.png
+│   │   └── icon48.png
+│   ├── index.html
+│   ├── js
+│   │   ├── lib
+│   │   │   ├── play
+│   │   │   │   ├── AudioPlayer_extension.js
+│   │   │   │   └── AudioPlayerProcessor_extension.worklet.js
+│   │   │   └── util
+│   │   │       └── ChatHistoryManager_extension.js
+│   │   ├── main_extension.js
+│   │   ├── toolConfig_extension.js
+│   │   └── websocketEvents_extension.js
+│   ├── manifest.json
+│   └── style.css
 ├── frontend
 │   ├── index.html
 │   ├── package-lock.json
@@ -102,7 +124,9 @@ The application consists of a frontend UI that captures user speech and plays ba
 │       ├── style.css
 │       ├── toolConfig.js
 │       └── websocketEvents.js
+├── LICENSE.txt
 └── README.md
+
 ```
 ## Deployment and Running
 
@@ -182,6 +206,22 @@ The application consists of a frontend UI that captures user speech and plays ba
       * "Agent search for Diwali." (Wait for the placeholder, then the UI notification "Search complete...")
       * Then ask: "What were the agent search results for Diwali?" (to test cached result retrieval).
 
+
+## Usage (Chrome Extension Focus)
+
+1.  Ensure the Backend Application (and A2A Server if testing `agentSearch`) is running.
+2.  Click the "Nova Sonic S2S Extension" icon in your Chrome toolbar. This will open the application UI in the browser's side panel.
+3.  In the side panel, click "Start" to begin the session.
+4.  Grant microphone permission when prompted by the browser (for the extension).
+5.  Speak into your microphone to interact.
+6.  Select different voices for Nova Sonic using the dropdown.
+7.  **Try invoking tools:**
+    * "What's the weather in New York?"
+    * "Agent search for Diwali." (Wait for the placeholder, then the UI notification "Search complete...")
+    * Then ask: "What were the agent search results for Diwali?"
+    * Navigate to a webpage with an interesting image, then say: "Analyze this page image" or "Image analyzer, describe what you see." (Wait for placeholder, then UI notification...)
+    * Then ask: "What did the image analysis find?"
+
 ## Implementing New Tools
 
 This application is designed for easy extension with new tools.
@@ -220,5 +260,15 @@ This application is designed for easy extension with new tools.
 For detailed examples, refer to `weather_tool.py` (synchronous) and the `agent_search/` package (asynchronous) in `backend/lib/`.
 The `agentSearch` tool uses an A2A client defined in `backend/lib/agent_search/agentclient.py`, which in turn uses shared A2A common libraries located in `backend/common/`.
 
+## Notes
+
+**May 2025**
+
+1. This code has been tested with the `amazon.nova-sonic-v1:0` version of the Amazon Nova Sonic model (the primary version available during testing). For the best experience, try with a wired headset and microphone combo.
+2. The `backend` has all the tools implemented: `numberRace`, `agentSearch`, `getWeather`, and `imageAnalyzer`. 
+3. Chrome Extension exposes `agentSearch`, `getWeather`, and `imageAnalyzer`.
+4. Web App exposes numberRace`, `agentSearch`, and `getWeather`
+
+
 ## About
-This project is licensed under the Apache License 2.0, and is open to contributions from the community.
+This project is licensed under the Apache License 2.0, and is open to contributions from the community..

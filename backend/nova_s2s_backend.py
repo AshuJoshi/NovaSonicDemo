@@ -12,6 +12,7 @@ import numpy as np
 from lib.weather_tool import handle_get_weather, get_weather_tool_spec
 from lib.number_race_tool import handle_number_race, get_number_race_tool_spec 
 from lib.agent_search.agent_search_tool import handle_agent_search, get_agent_search_tool_spec 
+from lib.image_analyzer.image_analyzer_tool import handle_imageanalyzer, get_imageanalyzer_tool_spec
 
 
 # Configure logging
@@ -19,9 +20,16 @@ LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
 # logging.basicConfig(level=LOGLEVEL, format="%(asctime)s %(levelname)s: %(message)s")
 # Configure logging with a timestamp in the format
 logging.basicConfig(
+    # filename='./novas2s.log',
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    force=True,
+    handlers=[
+        logging.FileHandler("debug.log"),
+        logging.StreamHandler()
+    ]
+    # filemode='w'  # 'w' to overwrite the file on each run, 'a' to append
 )
 logger = logging.getLogger(__name__)
 
@@ -80,6 +88,7 @@ class BedrockStreamManager:
             "getweather": handle_get_weather,
             "numberrace": handle_number_race,
             "agentsearch": handle_agent_search,
+            "imageanalyzer": handle_imageanalyzer,
             # Register other tool handlers here as they are created
             # e.g., "getbookofofferstool": handle_get_book_of_offers,
         }
@@ -91,6 +100,7 @@ class BedrockStreamManager:
             "getWeather": get_weather_tool_spec(),
             "numberRace": get_number_race_tool_spec(),
             "agentSearch": get_agent_search_tool_spec(),
+            "imageAnalyzer": get_imageanalyzer_tool_spec(),
             # Add other tool spec functions here
         }
         
@@ -98,7 +108,9 @@ class BedrockStreamManager:
         self.pending_tool_results = {}  # Key: toolUseId, Value: actual tool result dict
         self.active_background_tasks = {} # Key: toolUseId, Value: asyncio.Task
         self.completed_async_tool_results = {}
-        
+        self.pending_screenshot_events = {}  # Key: image_analysis_operation_id, Value: asyncio.Event
+        self.received_screenshot_data = {} # Key: image_analysis_operation_id, Value: imageDataUrl (string)        
+
         logger.info(f"Initialized BedrockStreamManager with tool handlers: {list(self.tool_handlers.keys())}")       
 
     def _initialize_client(self):
@@ -497,7 +509,8 @@ class BedrockStreamManager:
             handler = self.tool_handlers[tool_key]
             try:
                 # Pass 'self' (the BedrockStreamManager instance) to handlers that need it for async tasks
-                if tool_key == "agentsearch": # This is a simple way to identify handlers needing 'self'
+                # if tool_key == "agentsearch": # This is a simple way to identify handlers needing 'self'
+                if tool_key in ["agentsearch", "imageanalyzer"]: # Add other tools that need 'self' here
                     result_payload = await handler(self, toolUseContent)
                 # Add other async tools that need 'self' to this condition,
                 # OR refactor to a more generic way for handlers to declare this need.
@@ -518,7 +531,6 @@ class BedrockStreamManager:
                 "status": "error"
             }
         
-    # Inside BedrockStreamManager class in nova_s2s_backend.py
 
     async def launch_background_tool_task(self, tool_use_id: str, tool_name: str, actual_tool_coroutine_factory):
         """
@@ -593,7 +605,26 @@ class BedrockStreamManager:
         background_task = asyncio.create_task(task_wrapper())
         self.active_background_tasks[tool_use_id] = background_task
         logger.info(f"Scheduled background task for tool {tool_name} with ID {tool_use_id}")
-    # Inside BedrockStreamManager class in nova_s2s_backend.py
+
+    async def deliver_screenshot_data(self, analysis_id: str, image_data_url: str | None, error_message: str | None = None):
+        """
+        Delivers screenshot data (or error) from frontend to the waiting background task.
+        """
+        if analysis_id in self.pending_screenshot_events:
+            if error_message:
+                self.received_screenshot_data[analysis_id] = {"error": error_message} # Store error
+                logger.info(f"MANAGER: Screenshot capture error for {analysis_id} delivered: {error_message}")
+            elif image_data_url:
+                self.received_screenshot_data[analysis_id] = {"imageDataUrl": image_data_url} # Store data
+                logger.info(f"MANAGER: Screenshot data for {analysis_id} delivered and event will be set.")
+            else: # Should not happen if called correctly
+                self.received_screenshot_data[analysis_id] = {"error": "No image data and no error message provided."}
+                logger.warning(f"MANAGER: deliver_screenshot_data called for {analysis_id} with no data and no error.")
+
+            event_to_set = self.pending_screenshot_events[analysis_id]
+            event_to_set.set() # Wake up the waiting _execute_image_analysis_remotely task
+        else:
+            logger.warning(f"MANAGER: Received screenshot data/error for unknown or already processed analysis ID: {analysis_id}")
 
 async def websocket_handler(websocket, path=None):
     """Handle WebSocket connections from the frontend without authentication."""
@@ -661,8 +692,29 @@ async def websocket_handler(websocket, path=None):
         async for message in websocket:
             try:
                 data = json.loads(message)
+                custom_event_type = data.get("customEvent") # frontend will send a message to backend OOB
+                if custom_event_type == "capturedScreenshotData":
+                    logger.info("WS_HANDLER: 'capturedScreenshotData' customEvent received from frontend!") # For debugging
+                    payload = data.get("payload", {})
+                    analysis_id = payload.get("imageAnalysisId") # Standardized key
+                    image_data_url = payload.get("imageDataUrl")
+                    error_from_frontend = payload.get("error")
 
-                if "event" in data:
+                    if analysis_id:
+                        if error_from_frontend:
+                            logger.error(f"WS_HANDLER: Frontend reported error capturing screenshot for {analysis_id}: {error_from_frontend}")
+                            # Deliver None or error status to potentially unblock the waiting task with an error
+                            await stream_manager.deliver_screenshot_data(analysis_id, None, error_from_frontend)
+                        elif image_data_url:
+                            logger.info(f"WS_HANDLER: Received screenshot data for analysis ID: {analysis_id}. Attempting to deliver.")
+                            await stream_manager.deliver_screenshot_data(analysis_id, image_data_url, None)
+                        else:
+                            logger.warning(f"WS_HANDLER: 'capturedScreenshotData' for {analysis_id} received without imageDataUrl or error.")
+                            await stream_manager.deliver_screenshot_data(analysis_id, None, "Missing image data from frontend.")
+                    else:
+                        logger.error(f"WS_HANDLER: Missing imageAnalysisId in capturedScreenshotData: {payload}")
+
+                elif "event" in data:
                     event_type = list(data["event"].keys())[0]
 
                     # Store prompt name and content names if provided

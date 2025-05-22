@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Nova Sonic S2S</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="status" class="disconnected">Disconnected</div>
+      <div id="chat-container">
+        </div>
+
+      <div id="controls">
+        <button id="start" class="button">Start</button> <button id="stop" class="button" disabled>Stop</button> <div class="voice-selection-container">
+          <label for="voiceIdSelect">Voice:</label>
+          <select id="voiceIdSelect" class="button">
+            <option value="matthew">Matthew</option> <option value="tiffany">Tiffany</option>
+            <option value="amy">Amy</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="js/main_extension.js"></script>
+  </body>
+</html>
